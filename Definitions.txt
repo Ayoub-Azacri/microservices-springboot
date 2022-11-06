@@ -1,0 +1,116 @@
+-Project-Overview:
+    -Mainly we have 4 microservices which forms the core of the online shopping application:
+        - product service: exposes a Rest APi backed by Mongodb which mainly takes care
+                        of the product configuration of the application.
+
+        - inventory service: exposes a Rest APi backed by Mysql DB, it will verify if a
+                        product is in stock or not before the cosumters orders a product.
+
+        - order service: exposes a Rest APi backed by Mysql DB, this service takes care of
+                        processig the orders placed by the users. as part of ordering process
+                        we're going to make a synchronous communication with the inventory service
+                        we're going to make is resilient using "resilince4j".
+                resilience4j: example  order service is communication with the inventory service
+                and for some reason inventoryservice was not responding, and in this case
+                instead of continuously calling the inventoryservice we will execute a fallback logic
+                where we handle this failure and inform the upstream microservices that
+                the inventory service is down ===> this is called "Circuit Breaker pattern".
+
+        - notification service : we're going to perform asynchronous communication using
+                        event driven architecture. So as soon as the order placed
+                        we're going to fire an event and the notification service will listen
+                        for this event and will send order notification to the customers
+
+    -Api-gateway: we're using it so that all the requests will be routed to the corresponding services
+        for example if the client wants to call the Rest api of the product service, so instead
+        of calling the product service directly it will call the api gateway and based on the url
+        out api gateway will understand and route the request to the product service.
+    Together with api gateway we're going to also secure our microservices using the keycloack authorization
+        server.
+
+    -We have many micro services and we need to a way to enable service to service communication without
+        hardcoding the service information inside the service. For that we're going to use
+        spring-clound-netflix-eureka module as the service registry and discovery service.
+
+    -For all the services there will be some configurations and properties which needs to be mapped
+        for example if you want to change a property inside the application.properties of the product
+        service then you have to manually changed the property build and compile it and deploy the service
+        and if you want to do this for multiple services and instances it's not going to work
+        instead of that ==> we're going to maintain all the configurations and properties inside a
+        "Centralized config serve" which is backed by a git repository.
+
+    - If we want to store secret information like username and passwords it doesn't make any sence to
+        store them publicly inside the get repository. So for that we need a secure place to store them,
+        So we're going to to use Software called "Hashicorps Vault" to store all the secrets inside our
+        microservices architecture.
+
+    -So as we have this many microservices it's going to be hard to debug any issues that we're going to face
+    so if user performs a request and the response is slow we have no clue where the problem is,
+    we don't know if it is the order service or the inventory service .... So for this reason we're going
+    to use a library called "Zipkin" to implement distributed tracing So that we can trace the request and
+    response time for each service
+
+    -Lastly we're going to use "ElasticSeatch" logstash and kibana to implement Centralized logging
+    so that we can access the logs of all the services at one place
+
+
+
+-Discovery service :
+    *is a server which will store all the informations about the services (service name and IpAdresse)
+    *services will try to regesitre at the time of starting the APP with the discovery server
+        by making request
+    *Whenever the services are making the request, discovery server will add the entry of services
+        into it's local copy "registry". Once all the informations is present in the discovery server
+        whenever the order service want to call the inventory-service:
+        1)order-service will send request to the discovery server asking where i can find inventory service
+        2)Discovery server will respond  with particillar IpAdresse to call the inventory service
+        3) order service will make the call to inventory service
+    *Advnatage:
+        -we can avoid hardcoding  the url of the inventory service by making use of the discovery server.
+
+-API Getway :
+    *responsable to route the request from users to the correspondance services
+    *Authentification
+    *Security
+    *it'll acte as Load Balancing :
+                - if we have multiple instances of producte servie and if the user makes request
+                to the product-service, it'll make sure which instance of the product service to call
+                and it will return the response from that instance and send it back to the user
+
+    *SSL Termination
+
+    -Secure MicroServices :
+    *Acces services with authentification mecanisme.
+    *
+
+
+
+    -Configure Big Password encoder :
+    * in production projects you should not use noOpPasswordEncoder =
+                                        the password will not be encoded it'll be displayed in text
+
+
+-Circuit Breaker : -is mainly used when want to have resiliant communication =اتصال مرن
+    between our services { we're using WebClient to call inventoryservice
+    within orderservice "WebClient Sync communication"}.
+    -The problem with Synchronous communication is like we can have problems
+    while calling inventoryservice from orderservice. One of the problems is
+    like the inventoryservice maybee is not available maybee down. Second one
+    slowly response due to database or performance issue, we can expect slow Api calls
+    while calling
+    -By default if the communication between the services is working fine
+    that means if we don't find any issues, the state of circuit breaker will be in closed state
+    if the circuit breaker is in closed states => the communication will be allowed
+    - if inventory service not working as expected due to network or something, what will happen
+    is the circuit breaker will go to a state of Open,
+    The Open state means it won't allow the calls from order service to the inventoryservice
+    it won't allow it for certain time .
+    -when the state is close for certain time, circuit breaker will change the state to halfOpen
+    that means it will slowly start taking the request to the inventoryservice and it will check
+    whether the requests are going through or not.If the requests are still not going through
+    it will change the status to Open.
+
+    -Distributed Tracing : Spring Cloud Sleuth
+    Trace the request from API gateway to the service :
+        -traceid :
+        -Spanid
